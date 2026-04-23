@@ -3,17 +3,26 @@ from pathlib import Path
 
 # --- AGGRESSIVE MONKEY PATCH FOR VERCEL READ-ONLY FS ---
 import os
+from pathlib import Path
+
+# Redirect TabPFN to use /tmp for everything
+os.environ["TABPFN_HOME"] = "/tmp/.tabpfn"
+os.environ["TABPFN_MODEL_CACHE_DIR"] = "/tmp/.tabpfn/models"
+os.environ["TABPFN_DATASET_CACHE_DIR"] = "/tmp/.tabpfn/datasets"
+
 original_mkdir = os.mkdir
 original_makedirs = os.makedirs
 
 def patched_mkdir(path, mode=0o777):
-    if "/var/task" in str(path):
+    path_str = str(path)
+    if "/var/task" in path_str and not path_str.startswith("/tmp"):
         print(f"🚫 Blocking mkdir on read-only path: {path}")
         return
     return original_mkdir(path, mode)
 
 def patched_makedirs(name, mode=0o777, exist_ok=False):
-    if "/var/task" in str(name):
+    name_str = str(name)
+    if "/var/task" in name_str and not name_str.startswith("/tmp"):
         print(f"🚫 Blocking makedirs on read-only path: {name}")
         return
     return original_makedirs(name, mode, exist_ok)
@@ -25,6 +34,7 @@ os.makedirs = patched_makedirs
 try:
     import tabpfn_client
     from tabpfn_client.service_wrapper import UserAuthenticationClient
+    # Force token file to /tmp
     UserAuthenticationClient.CACHED_TOKEN_FILE = Path("/tmp/.tabpfn_token")
 except Exception:
     pass
