@@ -1,8 +1,16 @@
 import os
 
-# MANDATORY: Set these BEFORE any other imports for Vercel/Serverless support
-os.environ["TABPFN_CLIENT_CACHE_DIR"] = "/tmp"
-os.environ["HOME"] = "/tmp"
+from pathlib import Path
+
+# MANDATORY: Monkey Patch tabpfn_client BEFORE it does anything
+try:
+    import tabpfn_client
+    from tabpfn_client.service_wrapper import UserAuthenticationClient
+    # Force the token file to be in /tmp
+    UserAuthenticationClient.CACHED_TOKEN_FILE = Path("/tmp/.tabpfn_token")
+    print("✅ Monkey patched tabpfn_client token path to /tmp")
+except Exception as e:
+    print(f"⚠️ Could not monkey patch tabpfn_client: {e}")
 
 import joblib
 import pandas as pd
