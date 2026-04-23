@@ -1,16 +1,33 @@
 import os
-
 from pathlib import Path
 
-# MANDATORY: Monkey Patch tabpfn_client BEFORE it does anything
+# --- AGGRESSIVE MONKEY PATCH FOR VERCEL READ-ONLY FS ---
+import os
+original_mkdir = os.mkdir
+original_makedirs = os.makedirs
+
+def patched_mkdir(path, mode=0o777):
+    if "/var/task" in str(path):
+        print(f"🚫 Blocking mkdir on read-only path: {path}")
+        return
+    return original_mkdir(path, mode)
+
+def patched_makedirs(name, mode=0o777, exist_ok=False):
+    if "/var/task" in str(name):
+        print(f"🚫 Blocking makedirs on read-only path: {name}")
+        return
+    return original_makedirs(name, mode, exist_ok)
+
+os.mkdir = patched_mkdir
+os.makedirs = patched_makedirs
+# -------------------------------------------------------
+
 try:
     import tabpfn_client
     from tabpfn_client.service_wrapper import UserAuthenticationClient
-    # Force the token file to be in /tmp
     UserAuthenticationClient.CACHED_TOKEN_FILE = Path("/tmp/.tabpfn_token")
-    print("✅ Monkey patched tabpfn_client token path to /tmp")
-except Exception as e:
-    print(f"⚠️ Could not monkey patch tabpfn_client: {e}")
+except Exception:
+    pass
 
 import joblib
 import pandas as pd
