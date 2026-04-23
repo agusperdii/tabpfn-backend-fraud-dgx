@@ -1,4 +1,9 @@
 import os
+
+# MANDATORY: Set these BEFORE any other imports for Vercel/Serverless support
+os.environ["TABPFN_CLIENT_CACHE_DIR"] = "/tmp"
+os.environ["HOME"] = "/tmp"
+
 import joblib
 import pandas as pd
 import numpy as np
@@ -6,15 +11,15 @@ from fastapi import FastAPI, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
-from tabpfn_client import set_access_token
 
-# Load environment variables
+# Import this after setting environment variables
+try:
+    from tabpfn_client import set_access_token
+except ImportError:
+    set_access_token = None
+
+# Load environment variables from .env if present
 load_dotenv()
-
-# Vercel / Serverless Fix: Force cache to /tmp because the file system is read-only
-os.environ["TABPFN_CLIENT_CACHE_DIR"] = "/tmp"
-if os.environ.get("VERCEL"):
-    os.environ["HOME"] = "/tmp"
 
 # Initialize FastAPI
 app = FastAPI(title="TabPFN Fraud Detection API")
@@ -22,15 +27,21 @@ app = FastAPI(title="TabPFN Fraud Detection API")
 # Configure TabPFN Access Token
 api_key = os.getenv("PRIORLABS_API_KEY")
 if api_key:
-    try:
-        set_access_token(api_key)
-        print("✅ TabPFN Access token configured.")
-    except Exception as e:
-        print(f"⚠️ Warning: Could not set token cache: {e}")
-        # If set_access_token fails, we can try setting the env var directly
-        os.environ["TABPFN_TOKEN"] = api_key
+    # Set the token in environment variables so the client can use it without writing to disk
+    os.environ["TABPFN_TOKEN"] = api_key
+    
+    # Only call set_access_token if NOT on Vercel to avoid Read-only filesystem error
+    if not os.environ.get("VERCEL"):
+        try:
+            if set_access_token:
+                set_access_token(api_key)
+                print("✅ TabPFN Access token configured locally.")
+        except Exception as e:
+            print(f"⚠️ Warning: Could not set token cache (this is expected on Vercel): {e}")
+    else:
+        print("🚀 Running on Vercel: Using TABPFN_TOKEN environment variable.")
 else:
-    print("⚠️ PRIORLABS_API_KEY not found in .env")
+    print("⚠️ PRIORLABS_API_KEY not found in environment variables")
 
 # Load Models and Scalers
 try:
