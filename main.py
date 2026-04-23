@@ -72,6 +72,7 @@ import joblib
 import pandas as pd
 import numpy as np
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from typing import Optional
 from dotenv import load_dotenv
@@ -87,6 +88,15 @@ load_dotenv()
 
 # Initialize FastAPI
 app = FastAPI(title="TabPFN Fraud Detection API")
+
+# Enable CORS for React frontend
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 import warnings
 warnings.filterwarnings("ignore", category=UserWarning)
