@@ -11,14 +11,24 @@ from tabpfn_client import set_access_token
 # Load environment variables
 load_dotenv()
 
+# Vercel / Serverless Fix: Force cache to /tmp because the file system is read-only
+os.environ["TABPFN_CLIENT_CACHE_DIR"] = "/tmp"
+if os.environ.get("VERCEL"):
+    os.environ["HOME"] = "/tmp"
+
 # Initialize FastAPI
 app = FastAPI(title="TabPFN Fraud Detection API")
 
 # Configure TabPFN Access Token
 api_key = os.getenv("PRIORLABS_API_KEY")
 if api_key:
-    set_access_token(api_key)
-    print("✅ TabPFN Access token configured.")
+    try:
+        set_access_token(api_key)
+        print("✅ TabPFN Access token configured.")
+    except Exception as e:
+        print(f"⚠️ Warning: Could not set token cache: {e}")
+        # If set_access_token fails, we can try setting the env var directly
+        os.environ["TABPFN_TOKEN"] = api_key
 else:
     print("⚠️ PRIORLABS_API_KEY not found in .env")
 
