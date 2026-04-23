@@ -5,30 +5,59 @@ from pathlib import Path
 import os
 from pathlib import Path
 
-# Redirect TabPFN to use /tmp for everything
+# Redirect TabPFN to use /tmp for everything - MUST BE BEFORE OTHER IMPORTS
+os.environ["HOME"] = "/tmp"
 os.environ["TABPFN_HOME"] = "/tmp/.tabpfn"
 os.environ["TABPFN_MODEL_CACHE_DIR"] = "/tmp/.tabpfn/models"
 os.environ["TABPFN_DATASET_CACHE_DIR"] = "/tmp/.tabpfn/datasets"
+os.environ["XDG_CACHE_HOME"] = "/tmp/.cache"
 
 original_mkdir = os.mkdir
 original_makedirs = os.makedirs
 
-def patched_mkdir(path, mode=0o777):
+def redirect_path(path):
     path_str = str(path)
-    if "/var/task" in path_str and not path_str.startswith("/tmp"):
+    # If path is in /var/task and contains .tabpfn, redirect it to /tmp
+    if "/var/task" in path_str and ".tabpfn" in path_str:
+        # Extract everything after '.tabpfn' or 'tabpfn_client'
+        if ".tabpfn" in path_str:
+            rel = path_str.split(".tabpfn")[-1]
+            new_path = "/tmp/.tabpfn" + rel
+            return new_path
+        elif "tabpfn_client" in path_str:
+            rel = path_str.split("tabpfn_client")[-1]
+            new_path = "/tmp/.tabpfn" + rel
+            return new_path
+    return path_str
+
+def patched_mkdir(path, mode=0o777):
+    path = redirect_path(path)
+    # If it's still in /var/task and not redirected, block it
+    if "/var/task" in str(path) and not str(path).startswith("/tmp"):
         print(f"🚫 Blocking mkdir on read-only path: {path}")
         return
     return original_mkdir(path, mode)
 
 def patched_makedirs(name, mode=0o777, exist_ok=False):
-    name_str = str(name)
-    if "/var/task" in name_str and not name_str.startswith("/tmp"):
+    name = redirect_path(name)
+    # If it's still in /var/task and not redirected, block it
+    if "/var/task" in str(name) and not str(name).startswith("/tmp"):
         print(f"🚫 Blocking makedirs on read-only path: {name}")
         return
-    return original_makedirs(name, mode, exist_ok)
+    return original_makedirs(name, mode, exist_ok=False if name == str(name) else exist_ok) # Handle possible type mismatch
 
 os.mkdir = patched_mkdir
 os.makedirs = patched_makedirs
+
+# We also need to patch open to redirect reads/writes for these paths
+import builtins
+original_open = builtins.open
+
+def patched_open(file, mode='r', *args, **kwargs):
+    file = redirect_path(file)
+    return original_open(file, mode, *args, **kwargs)
+
+builtins.open = patched_open
 # -------------------------------------------------------
 
 try:
